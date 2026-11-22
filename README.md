@@ -1,4 +1,4 @@
-# PAM Vault
+# Pass Vault
 
 A small Privileged Access Management backend built with Spring Boot. Owners store server/database credentials, share them with teammates, and approve time limited access to passwords. Passwords are encrypted at rest and rotated automatically on a schedule.
 
@@ -25,7 +25,7 @@ Java 17, Spring Boot 3.5, Spring Security, Hibernate 6 (Session + Criteria API w
 On Windows use `mvnw.cmd spring-boot:run`. To use another port set `PORT`, e.g. `PORT=9090`.
 
 - API base URL: http://localhost:8095/api
-- H2 console: http://localhost:8095/h2-console (JDBC URL `jdbc:h2:file:./data/pamvault`, user `sa`)
+- H2 console: http://localhost:8095/h2-console (JDBC URL `jdbc:h2:file:./data/passvault`, user `sa`)
 
 A default admin is created on first start: `admin` / `Admin@123`.
 
@@ -93,7 +93,7 @@ Request states: `PENDING → APPROVED → EXPIRED / REVOKED / CANCELLED`, or `PE
 ## Project structure
 
 ```
-com.pamvault
+com.passvault
 ├── config        security, default admin
 ├── security      JWT filter, token service, user principal
 ├── controller    REST endpoints
@@ -108,4 +108,4 @@ com.pamvault
 
 ## Note
 
-Rotation updates the password stored in the vault only. A production PAM would also change it on the target system (SSH, JDBC, LDAP).
+Rotation updates the password stored in the vault only. A production-grade vault would also change it on the target system (SSH, JDBC, LDAP).

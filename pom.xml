@@ -11,10 +11,10 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.pamvault</groupId>
-    <artifactId>pam-vault</artifactId>
+    <groupId>com.passvault</groupId>
+    <artifactId>pass-vault</artifactId>
     <version>1.0.0</version>
-    <name>pam-vault</name>
+    <name>pass-vault</name>
     <description>Privileged password vault with time bound access and rotation</description>
 
     <properties>
