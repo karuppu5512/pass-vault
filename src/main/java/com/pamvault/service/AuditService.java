@@ -37,17 +37,17 @@ public class AuditService {
 
     @Transactional(readOnly = true)
     public PageResponse<AuditLogResponse> findAll(int page, int size) {
-        var content = auditLogDao.findPage(page, size).stream().map(AuditLogResponse::from).toList();
-        return PageResponse.of(content, page, size, auditLogDao.count());
+        var content = auditLogDao.findPage(null, page, size).stream().map(AuditLogResponse::from).toList();
+        return PageResponse.of(content, page, size, auditLogDao.countAll(null));
     }
 
     @Transactional(readOnly = true)
     public PageResponse<AuditLogResponse> findByResource(AppUserPrincipal me, Long resourceId, int page, int size) {
         accessService.requireOwner(me.getId(), accessService.getResource(resourceId));
-        var content = auditLogDao.findPageByResource(resourceId, page, size).stream()
+        var content = auditLogDao.findPage(resourceId, page, size).stream()
                 .map(AuditLogResponse::from)
                 .toList();
-        return PageResponse.of(content, page, size, auditLogDao.countByResource(resourceId));
+        return PageResponse.of(content, page, size, auditLogDao.countAll(resourceId));
     }
 
     private String currentIp() {

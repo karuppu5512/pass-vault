@@ -1,6 +1,10 @@
 package com.pamvault.dao;
 
 import com.pamvault.entity.User;
+import com.pamvault.entity.User_;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
+import org.hibernate.query.criteria.HibernateCriteriaBuilder;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -14,28 +18,30 @@ public class UserDao extends BaseDao<User> {
     }
 
     public Optional<User> findByUsername(String username) {
-        return query("from User u where u.username = :username")
-                .setParameter("username", username)
-                .uniqueResultOptional();
+        HibernateCriteriaBuilder cb = builder();
+        CriteriaQuery<User> cq = cb.createQuery(User.class);
+        Root<User> user = cq.from(User.class);
+        cq.where(cb.equal(user.get(User_.username), username));
+        return query(cq).uniqueResultOptional();
     }
 
     public boolean existsByUsername(String username) {
-        return longQuery("select count(u) from User u where u.username = :username")
-                .setParameter("username", username)
-                .uniqueResult() > 0;
+        return count(user -> builder().equal(user.get(User_.username), username)) > 0;
     }
 
     public boolean existsByEmail(String email) {
-        return longQuery("select count(u) from User u where lower(u.email) = lower(:email)")
-                .setParameter("email", email)
-                .uniqueResult() > 0;
+        return count(user -> builder().equal(builder().lower(user.get(User_.email)), email.toLowerCase())) > 0;
     }
 
     public List<User> findAll() {
-        return query("from User u order by u.username").list();
+        HibernateCriteriaBuilder cb = builder();
+        CriteriaQuery<User> cq = cb.createQuery(User.class);
+        Root<User> user = cq.from(User.class);
+        cq.orderBy(cb.asc(user.get(User_.username)));
+        return query(cq).list();
     }
 
     public long count() {
-        return longQuery("select count(u) from User u").uniqueResult();
+        return count(null);
     }
 }

@@ -1,6 +1,11 @@
 package com.pamvault.dao;
 
 import com.pamvault.entity.Account;
+import com.pamvault.entity.Account_;
+import com.pamvault.entity.Resource_;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
+import org.hibernate.query.criteria.HibernateCriteriaBuilder;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -13,18 +18,20 @@ public class AccountDao extends BaseDao<Account> {
     }
 
     public List<Account> findByResource(Long resourceId) {
-        return query("from Account a join fetch a.resource where a.resource.id = :resourceId order by a.loginName")
-                .setParameter("resourceId", resourceId)
-                .list();
+        HibernateCriteriaBuilder cb = builder();
+        CriteriaQuery<Account> cq = cb.createQuery(Account.class);
+        Root<Account> account = cq.from(Account.class);
+        account.fetch(Account_.resource);
+        cq.where(cb.equal(account.get(Account_.resource).get(Resource_.id), resourceId))
+                .orderBy(cb.asc(account.get(Account_.loginName)));
+        return query(cq).list();
     }
 
     public boolean existsByLoginName(Long resourceId, String loginName) {
-        return longQuery("""
-                select count(a) from Account a
-                where a.resource.id = :resourceId and lower(a.loginName) = lower(:loginName)
-                """)
-                .setParameter("resourceId", resourceId)
-                .setParameter("loginName", loginName)
-                .uniqueResult() > 0;
+        HibernateCriteriaBuilder cb = builder();
+        return count(account -> cb.and(
+                cb.equal(account.get(Account_.resource).get(Resource_.id), resourceId),
+                cb.equal(cb.lower(account.get(Account_.loginName)), loginName.toLowerCase())
+        )) > 0;
     }
 }

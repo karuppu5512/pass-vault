@@ -2,11 +2,16 @@ package com.pamvault.dao;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import org.hibernate.Session;
 import org.hibernate.query.Query;
+import org.hibernate.query.criteria.HibernateCriteriaBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.util.function.Function;
 
 @Transactional
 public abstract class BaseDao<T> {
@@ -24,12 +29,23 @@ public abstract class BaseDao<T> {
         return entityManager.unwrap(Session.class);
     }
 
-    protected Query<T> query(String hql) {
-        return session().createQuery(hql, entityClass);
+    protected HibernateCriteriaBuilder builder() {
+        return session().getCriteriaBuilder();
     }
 
-    protected Query<Long> longQuery(String hql) {
-        return session().createQuery(hql, Long.class);
+    protected <R> Query<R> query(CriteriaQuery<R> criteria) {
+        return session().createQuery(criteria);
+    }
+
+    protected long count(Function<Root<T>, Predicate> condition) {
+        HibernateCriteriaBuilder cb = builder();
+        CriteriaQuery<Long> cq = cb.createQuery(Long.class);
+        Root<T> root = cq.from(entityClass);
+        cq.select(cb.count(root));
+        if (condition != null) {
+            cq.where(condition.apply(root));
+        }
+        return query(cq).getSingleResult();
     }
 
     public T save(T entity) {

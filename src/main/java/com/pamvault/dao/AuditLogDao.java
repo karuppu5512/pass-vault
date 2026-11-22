@@ -1,6 +1,10 @@
 package com.pamvault.dao;
 
 import com.pamvault.entity.AuditLog;
+import com.pamvault.entity.AuditLog_;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
+import org.hibernate.query.criteria.HibernateCriteriaBuilder;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -12,28 +16,21 @@ public class AuditLogDao extends BaseDao<AuditLog> {
         super(AuditLog.class);
     }
 
-    public List<AuditLog> findPage(int page, int size) {
-        return query("from AuditLog l order by l.createdAt desc, l.id desc")
+    public List<AuditLog> findPage(Long resourceId, int page, int size) {
+        HibernateCriteriaBuilder cb = builder();
+        CriteriaQuery<AuditLog> cq = cb.createQuery(AuditLog.class);
+        Root<AuditLog> log = cq.from(AuditLog.class);
+        if (resourceId != null) {
+            cq.where(cb.equal(log.get(AuditLog_.resourceId), resourceId));
+        }
+        cq.orderBy(cb.desc(log.get(AuditLog_.createdAt)), cb.desc(log.get(AuditLog_.id)));
+        return query(cq)
                 .setFirstResult(page * size)
                 .setMaxResults(size)
                 .list();
     }
 
-    public long count() {
-        return longQuery("select count(l) from AuditLog l").uniqueResult();
-    }
-
-    public List<AuditLog> findPageByResource(Long resourceId, int page, int size) {
-        return query("from AuditLog l where l.resourceId = :resourceId order by l.createdAt desc, l.id desc")
-                .setParameter("resourceId", resourceId)
-                .setFirstResult(page * size)
-                .setMaxResults(size)
-                .list();
-    }
-
-    public long countByResource(Long resourceId) {
-        return longQuery("select count(l) from AuditLog l where l.resourceId = :resourceId")
-                .setParameter("resourceId", resourceId)
-                .uniqueResult();
+    public long countAll(Long resourceId) {
+        return count(resourceId == null ? null : log -> builder().equal(log.get(AuditLog_.resourceId), resourceId));
     }
 }
