@@ -22,10 +22,10 @@ Java 17, Spring Boot 3.5, Spring Security, Spring Data JPA (Hibernate), PostgreS
 ./mvnw spring-boot:run
 ```
 
-On Windows use `mvnw.cmd spring-boot:run`. To use another port set `PORT`, e.g. `PORT=8095`.
+On Windows use `mvnw.cmd spring-boot:run`. To use another port set `PORT`, e.g. `PORT=9090`.
 
-- API base URL: http://localhost:8080/api
-- H2 console: http://localhost:8080/h2-console (JDBC URL `jdbc:h2:file:./data/pamvault`, user `sa`)
+- API base URL: http://localhost:8095/api
+- H2 console: http://localhost:8095/h2-console (JDBC URL `jdbc:h2:file:./data/pamvault`, user `sa`)
 
 A default admin is created on first start: `admin` / `Admin@123`.
 
