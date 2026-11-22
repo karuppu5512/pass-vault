@@ -1,14 +1,13 @@
 package com.pamvault.service;
 
+import com.pamvault.dao.AuditLogDao;
 import com.pamvault.dto.AuditLogResponse;
 import com.pamvault.dto.PageResponse;
 import com.pamvault.entity.AuditLog;
 import com.pamvault.enums.AuditAction;
-import com.pamvault.repository.AuditLogRepository;
 import com.pamvault.security.AppUserPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -20,7 +19,7 @@ public class AuditService {
 
     public static final String SYSTEM = "system";
 
-    private final AuditLogRepository auditLogRepository;
+    private final AuditLogDao auditLogDao;
     private final ResourceAccessService accessService;
 
     public void log(String username, AuditAction action, String targetType, Long targetId, Long resourceId,
@@ -33,19 +32,22 @@ public class AuditService {
         entry.setResourceId(resourceId);
         entry.setDetails(details);
         entry.setIpAddress(currentIp());
-        auditLogRepository.save(entry);
+        auditLogDao.save(entry);
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<AuditLogResponse> findAll(Pageable pageable) {
-        return PageResponse.from(auditLogRepository.findAllByOrderByCreatedAtDesc(pageable), AuditLogResponse::from);
+    public PageResponse<AuditLogResponse> findAll(int page, int size) {
+        var content = auditLogDao.findPage(page, size).stream().map(AuditLogResponse::from).toList();
+        return PageResponse.of(content, page, size, auditLogDao.count());
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<AuditLogResponse> findByResource(AppUserPrincipal me, Long resourceId, Pageable pageable) {
+    public PageResponse<AuditLogResponse> findByResource(AppUserPrincipal me, Long resourceId, int page, int size) {
         accessService.requireOwner(me.getId(), accessService.getResource(resourceId));
-        return PageResponse.from(auditLogRepository.findByResourceIdOrderByCreatedAtDesc(resourceId, pageable),
-                AuditLogResponse::from);
+        var content = auditLogDao.findPageByResource(resourceId, page, size).stream()
+                .map(AuditLogResponse::from)
+                .toList();
+        return PageResponse.of(content, page, size, auditLogDao.countByResource(resourceId));
     }
 
     private String currentIp() {

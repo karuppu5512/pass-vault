@@ -1,5 +1,7 @@
 package com.pamvault.service;
 
+import com.pamvault.dao.AccessRequestDao;
+import com.pamvault.dao.AccountDao;
 import com.pamvault.dto.ResourceDtos.AccountRequest;
 import com.pamvault.dto.ResourceDtos.AccountResponse;
 import com.pamvault.dto.ResourceDtos.ChangePasswordRequest;
@@ -10,11 +12,8 @@ import com.pamvault.entity.Resource;
 import com.pamvault.enums.AccessLevel;
 import com.pamvault.enums.AuditAction;
 import com.pamvault.enums.ChangeSource;
-import com.pamvault.enums.RequestStatus;
 import com.pamvault.exception.ConflictException;
 import com.pamvault.exception.ForbiddenException;
-import com.pamvault.repository.AccessRequestRepository;
-import com.pamvault.repository.AccountRepository;
 import com.pamvault.security.AppUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,8 +26,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AccountService {
 
-    private final AccountRepository accountRepository;
-    private final AccessRequestRepository accessRequestRepository;
+    private final AccountDao accountDao;
+    private final AccessRequestDao accessRequestDao;
     private final ResourceAccessService accessService;
     private final EncryptionService encryptionService;
     private final RotationService rotationService;
@@ -40,7 +39,7 @@ public class AccountService {
         accessService.requireOwner(me.getId(), resource);
 
         String loginName = request.loginName().trim();
-        if (accountRepository.existsByResourceIdAndLoginNameIgnoreCase(resourceId, loginName)) {
+        if (accountDao.existsByLoginName(resourceId, loginName)) {
             throw new ConflictException("Account '" + loginName + "' already exists on this resource");
         }
 
@@ -49,7 +48,7 @@ public class AccountService {
         account.setLoginName(loginName);
         account.setEncryptedPassword(encryptionService.encrypt(rotationService.resolvePassword(request.password())));
         account.setLastRotatedAt(LocalDateTime.now());
-        accountRepository.save(account);
+        accountDao.save(account);
 
         auditService.log(me.getUsername(), AuditAction.ACCOUNT_ADDED, "ACCOUNT", account.getId(), resourceId, loginName);
         return AccountResponse.from(account);
@@ -59,7 +58,7 @@ public class AccountService {
     public List<AccountResponse> findByResource(AppUserPrincipal me, Long resourceId) {
         Resource resource = accessService.getResource(resourceId);
         accessService.requireAccess(me.getId(), resource);
-        return accountRepository.findByResourceIdOrderByLoginNameAsc(resourceId).stream()
+        return accountDao.findByResource(resourceId).stream()
                 .map(AccountResponse::from)
                 .toList();
     }
@@ -79,7 +78,7 @@ public class AccountService {
         Account account = accessService.getAccount(accountId);
         Long resourceId = account.getResource().getId();
         accessService.requireOwner(me.getId(), account.getResource());
-        accountRepository.delete(account);
+        accountDao.delete(account);
 
         auditService.log(me.getUsername(), AuditAction.ACCOUNT_DELETED, "ACCOUNT", accountId, resourceId,
                 account.getLoginName());
@@ -94,9 +93,7 @@ public class AccountService {
         String details = "Direct access as " + level;
 
         if (level == AccessLevel.VIEW) {
-            AccessRequest grant = accessRequestRepository
-                    .findFirstByAccountIdAndRequesterIdAndStatusAndAccessEndTimeAfter(
-                            accountId, me.getId(), RequestStatus.APPROVED, LocalDateTime.now())
+            AccessRequest grant = accessRequestDao.findActiveGrant(accountId, me.getId(), LocalDateTime.now())
                     .orElseThrow(() -> new ForbiddenException(
                             "You don't have active access to this password. Raise an access request first."));
             expiresAt = grant.getAccessEndTime();

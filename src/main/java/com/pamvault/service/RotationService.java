@@ -1,5 +1,8 @@
 package com.pamvault.service;
 
+import com.pamvault.dao.PasswordHistoryDao;
+import com.pamvault.dao.RotationPolicyDao;
+import com.pamvault.dao.UserDao;
 import com.pamvault.dto.ResourceDtos.AccountResponse;
 import com.pamvault.dto.RotationDtos.PasswordHistoryResponse;
 import com.pamvault.dto.RotationDtos.RotationPolicyRequest;
@@ -12,9 +15,6 @@ import com.pamvault.enums.ChangeSource;
 import com.pamvault.enums.RotationUnit;
 import com.pamvault.exception.BadRequestException;
 import com.pamvault.exception.NotFoundException;
-import com.pamvault.repository.PasswordHistoryRepository;
-import com.pamvault.repository.RotationPolicyRepository;
-import com.pamvault.repository.UserRepository;
 import com.pamvault.security.AppUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,9 +33,9 @@ public class RotationService {
     private static final int DEFAULT_LENGTH = 16;
     private static final int MIN_INTERVAL_MINUTES = 5;
 
-    private final RotationPolicyRepository policyRepository;
-    private final PasswordHistoryRepository historyRepository;
-    private final UserRepository userRepository;
+    private final RotationPolicyDao policyDao;
+    private final PasswordHistoryDao historyDao;
+    private final UserDao userDao;
     private final ResourceAccessService accessService;
     private final EncryptionService encryptionService;
     private final PasswordGenerator passwordGenerator;
@@ -50,19 +50,19 @@ public class RotationService {
             throw new BadRequestException("Minimum rotation interval is " + MIN_INTERVAL_MINUTES + " minutes");
         }
 
-        RotationPolicy policy = policyRepository.findByAccountId(accountId).orElseGet(() -> {
-            RotationPolicy p = new RotationPolicy();
-            p.setAccount(account);
-            return p;
-        });
+        RotationPolicy policy = policyDao.findByAccount(accountId).orElse(null);
+        if (policy == null) {
+            policy = new RotationPolicy();
+            policy.setAccount(account);
+        }
         policy.setEnabled(request.enabled());
         policy.setIntervalValue(request.intervalValue());
         policy.setIntervalUnit(request.intervalUnit());
         policy.setPasswordLength(request.passwordLength());
         policy.setIncludeSpecialChars(request.includeSpecialChars());
         policy.setNextRotationAt(request.enabled() ? nextRun(policy, LocalDateTime.now()) : null);
-        policy.setUpdatedBy(userRepository.getReferenceById(me.getId()));
-        policyRepository.save(policy);
+        policy.setUpdatedBy(userDao.getReference(me.getId()));
+        policyDao.save(policy);
 
         auditService.log(me.getUsername(), AuditAction.ROTATION_POLICY_SAVED, "ACCOUNT", accountId,
                 account.getResource().getId(), describe(policy));
@@ -73,7 +73,7 @@ public class RotationService {
     public RotationPolicyResponse getPolicy(AppUserPrincipal me, Long accountId) {
         Account account = accessService.getAccount(accountId);
         accessService.requireOwner(me.getId(), account.getResource());
-        return policyRepository.findByAccountId(accountId)
+        return policyDao.findByAccount(accountId)
                 .map(RotationPolicyResponse::from)
                 .orElseThrow(() -> new NotFoundException("No rotation policy configured for this account"));
     }
@@ -91,21 +91,19 @@ public class RotationService {
     public List<PasswordHistoryResponse> history(AppUserPrincipal me, Long accountId) {
         Account account = accessService.getAccount(accountId);
         accessService.requireOwner(me.getId(), account.getResource());
-        return historyRepository.findByAccountIdOrderByChangedAtDesc(accountId).stream()
+        return historyDao.findByAccount(accountId).stream()
                 .map(PasswordHistoryResponse::from)
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<Long> findDuePolicyIds() {
-        return policyRepository.findByEnabledTrueAndNextRotationAtLessThanEqual(LocalDateTime.now()).stream()
-                .map(RotationPolicy::getId)
-                .toList();
+        return policyDao.findDueIds(LocalDateTime.now());
     }
 
     @Transactional
     public void runScheduledRotation(Long policyId) {
-        RotationPolicy policy = policyRepository.findById(policyId).orElse(null);
+        RotationPolicy policy = policyDao.findById(policyId).orElse(null);
         LocalDateTime now = LocalDateTime.now();
         if (policy == null || !policy.isEnabled() || policy.getNextRotationAt().isAfter(now)) {
             return;
@@ -131,7 +129,7 @@ public class RotationService {
         old.setSource(source);
         old.setChangedBy(changedBy);
         old.setReason(reason);
-        historyRepository.save(old);
+        historyDao.save(old);
 
         account.setEncryptedPassword(encryptionService.encrypt(newPassword));
         account.setLastRotatedAt(LocalDateTime.now());
@@ -142,7 +140,7 @@ public class RotationService {
     }
 
     public String generateFor(Account account) {
-        return policyRepository.findByAccountId(account.getId())
+        return policyDao.findByAccount(account.getId())
                 .map(p -> passwordGenerator.generate(p.getPasswordLength(), p.isIncludeSpecialChars()))
                 .orElseGet(() -> passwordGenerator.generate(DEFAULT_LENGTH, true));
     }

@@ -14,7 +14,7 @@ A small Privileged Access Management backend built with Spring Boot. Owners stor
 
 ## Tech stack
 
-Java 17, Spring Boot 3.5, Spring Security, Spring Data JPA (Hibernate), PostgreSQL (H2 for local dev), JJWT, Lombok
+Java 17, Spring Boot 3.5, Spring Security, Hibernate 6 (Session API + HQL), PostgreSQL (H2 for local dev), JJWT, Lombok
 
 ## Run
 
@@ -99,7 +99,7 @@ com.pamvault
 ├── controller    REST endpoints
 ├── service       business logic
 ├── scheduler     expiry and rotation jobs
-├── repository    Spring Data JPA repositories
+├── dao           Hibernate DAOs (Session + HQL queries)
 ├── entity        JPA entities
 ├── dto           request / response records
 ├── enums

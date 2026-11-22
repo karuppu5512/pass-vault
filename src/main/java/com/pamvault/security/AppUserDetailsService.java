@@ -1,6 +1,6 @@
 package com.pamvault.security;
 
-import com.pamvault.repository.UserRepository;
+import com.pamvault.dao.UserDao;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -11,11 +11,11 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AppUserDetailsService implements UserDetailsService {
 
-    private final UserRepository userRepository;
+    private final UserDao userDao;
 
     @Override
     public UserDetails loadUserByUsername(String username) {
-        return userRepository.findByUsername(username)
+        return userDao.findByUsername(username)
                 .map(AppUserPrincipal::new)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
     }

@@ -1,12 +1,12 @@
 package com.pamvault.service;
 
+import com.pamvault.dao.ResourceDao;
+import com.pamvault.dao.UserDao;
 import com.pamvault.dto.ResourceDtos.ResourceRequest;
 import com.pamvault.dto.ResourceDtos.ResourceResponse;
 import com.pamvault.entity.Resource;
 import com.pamvault.enums.AccessLevel;
 import com.pamvault.enums.AuditAction;
-import com.pamvault.repository.ResourceRepository;
-import com.pamvault.repository.UserRepository;
 import com.pamvault.security.AppUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,8 +19,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ResourceService {
 
-    private final ResourceRepository resourceRepository;
-    private final UserRepository userRepository;
+    private final ResourceDao resourceDao;
+    private final UserDao userDao;
     private final ResourceAccessService accessService;
     private final AuditService auditService;
 
@@ -28,8 +28,8 @@ public class ResourceService {
     public ResourceResponse create(AppUserPrincipal me, ResourceRequest request) {
         Resource resource = new Resource();
         apply(resource, request);
-        resource.setOwner(userRepository.getReferenceById(me.getId()));
-        resourceRepository.save(resource);
+        resource.setOwner(userDao.getReference(me.getId()));
+        resourceDao.save(resource);
 
         auditService.log(me.getUsername(), AuditAction.RESOURCE_CREATED, "RESOURCE", resource.getId(),
                 resource.getId(), resource.getName());
@@ -39,9 +39,9 @@ public class ResourceService {
     @Transactional(readOnly = true)
     public List<ResourceResponse> findMine(AppUserPrincipal me) {
         List<ResourceResponse> result = new ArrayList<>();
-        resourceRepository.findByOwnerIdOrderByNameAsc(me.getId())
+        resourceDao.findByOwner(me.getId())
                 .forEach(r -> result.add(ResourceResponse.from(r, AccessLevel.OWNER)));
-        resourceRepository.findSharedWith(me.getId())
+        resourceDao.findSharedWith(me.getId())
                 .forEach(r -> result.add(ResourceResponse.from(r, accessService.requireAccess(me.getId(), r))));
         return result;
     }
@@ -67,7 +67,7 @@ public class ResourceService {
     public void delete(AppUserPrincipal me, Long id) {
         Resource resource = accessService.getResource(id);
         accessService.requireOwner(me.getId(), resource);
-        resourceRepository.delete(resource);
+        resourceDao.delete(resource);
 
         auditService.log(me.getUsername(), AuditAction.RESOURCE_DELETED, "RESOURCE", id, id, resource.getName());
     }

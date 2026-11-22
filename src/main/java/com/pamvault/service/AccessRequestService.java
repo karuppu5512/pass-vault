@@ -1,5 +1,7 @@
 package com.pamvault.service;
 
+import com.pamvault.dao.AccessRequestDao;
+import com.pamvault.dao.UserDao;
 import com.pamvault.dto.AccessDtos.AccessRequestResponse;
 import com.pamvault.dto.AccessDtos.CreateAccessRequest;
 import com.pamvault.dto.AccessDtos.ReviewRequest;
@@ -12,8 +14,6 @@ import com.pamvault.exception.BadRequestException;
 import com.pamvault.exception.ConflictException;
 import com.pamvault.exception.ForbiddenException;
 import com.pamvault.exception.NotFoundException;
-import com.pamvault.repository.AccessRequestRepository;
-import com.pamvault.repository.UserRepository;
 import com.pamvault.security.AppUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,8 +29,8 @@ public class AccessRequestService {
 
     private static final List<RequestStatus> OPEN = List.of(RequestStatus.PENDING, RequestStatus.APPROVED);
 
-    private final AccessRequestRepository requestRepository;
-    private final UserRepository userRepository;
+    private final AccessRequestDao requestDao;
+    private final UserDao userDao;
     private final ResourceAccessService accessService;
     private final RotationService rotationService;
     private final AuditService auditService;
@@ -49,17 +49,17 @@ public class AccessRequestService {
         if (level != AccessLevel.VIEW) {
             throw new BadRequestException("You already have direct access to this password");
         }
-        if (requestRepository.existsByAccountIdAndRequesterIdAndStatusIn(accountId, me.getId(), OPEN)) {
+        if (requestDao.existsOpen(accountId, me.getId(), OPEN)) {
             throw new ConflictException("You already have a pending or active request for this account");
         }
 
         AccessRequest ar = new AccessRequest();
         ar.setAccount(account);
-        ar.setRequester(userRepository.getReferenceById(me.getId()));
+        ar.setRequester(userDao.getReference(me.getId()));
         ar.setReason(request.reason().trim());
         ar.setDurationMinutes(request.durationMinutes());
         ar.setStatus(RequestStatus.PENDING);
-        requestRepository.save(ar);
+        requestDao.save(ar);
 
         audit(me.getUsername(), AuditAction.ACCESS_REQUESTED, ar,
                 request.durationMinutes() + " min - " + ar.getReason());
@@ -68,14 +68,14 @@ public class AccessRequestService {
 
     @Transactional(readOnly = true)
     public List<AccessRequestResponse> findMine(AppUserPrincipal me) {
-        return requestRepository.findByRequesterIdOrderByRequestedAtDesc(me.getId()).stream()
+        return requestDao.findByRequester(me.getId()).stream()
                 .map(AccessRequestResponse::from)
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<AccessRequestResponse> findPendingForOwner(AppUserPrincipal me) {
-        return requestRepository.findForOwner(me.getId(), RequestStatus.PENDING).stream()
+        return requestDao.findForOwner(me.getId(), RequestStatus.PENDING).stream()
                 .map(AccessRequestResponse::from)
                 .toList();
     }
@@ -129,7 +129,7 @@ public class AccessRequestService {
 
     @Transactional
     public AccessRequestResponse cancel(AppUserPrincipal me, Long id) {
-        AccessRequest ar = requestRepository.findById(id).orElseThrow(() -> NotFoundException.of("Access request", id));
+        AccessRequest ar = requestDao.findById(id).orElseThrow(() -> NotFoundException.of("Access request", id));
         if (!ar.getRequester().getId().equals(me.getId())) {
             throw new ForbiddenException("You can only cancel your own requests");
         }
@@ -147,7 +147,7 @@ public class AccessRequestService {
     }
 
     public void closeOpenRequests(Long resourceId, Long userId, String closedBy) {
-        requestRepository.findByAccountResourceIdAndRequesterIdAndStatusIn(resourceId, userId, OPEN).forEach(ar -> {
+        requestDao.findOpenOnResource(resourceId, userId, OPEN).forEach(ar -> {
             boolean wasActive = ar.getStatus() == RequestStatus.APPROVED;
             close(ar, wasActive ? RequestStatus.REVOKED : RequestStatus.CANCELLED);
             audit(closedBy, wasActive ? AuditAction.ACCESS_REVOKED : AuditAction.ACCESS_CANCELLED, ar,
@@ -160,20 +160,18 @@ public class AccessRequestService {
 
     @Transactional(readOnly = true)
     public List<Long> findFinishedGrantIds() {
-        return requestRepository.findByStatusAndAccessEndTimeBefore(RequestStatus.APPROVED, LocalDateTime.now())
-                .stream().map(AccessRequest::getId).toList();
+        return requestDao.findExpiredGrantIds(LocalDateTime.now());
     }
 
     @Transactional(readOnly = true)
     public List<Long> findStalePendingIds() {
         LocalDateTime cutoff = LocalDateTime.now().minusHours(pendingTimeoutHours);
-        return requestRepository.findByStatusAndRequestedAtBefore(RequestStatus.PENDING, cutoff)
-                .stream().map(AccessRequest::getId).toList();
+        return requestDao.findPendingIdsBefore(cutoff);
     }
 
     @Transactional
     public void expire(Long id) {
-        AccessRequest ar = requestRepository.findById(id).orElse(null);
+        AccessRequest ar = requestDao.findById(id).orElse(null);
         if (ar == null || !OPEN.contains(ar.getStatus())) {
             return;
         }
@@ -207,7 +205,7 @@ public class AccessRequestService {
     }
 
     private AccessRequest getForOwner(AppUserPrincipal me, Long id) {
-        AccessRequest ar = requestRepository.findById(id).orElseThrow(() -> NotFoundException.of("Access request", id));
+        AccessRequest ar = requestDao.findById(id).orElseThrow(() -> NotFoundException.of("Access request", id));
         accessService.requireOwner(me.getId(), ar.getAccount().getResource());
         return ar;
     }
@@ -219,7 +217,7 @@ public class AccessRequestService {
     }
 
     private void markReviewed(AccessRequest ar, AppUserPrincipal me, ReviewRequest review, LocalDateTime now) {
-        ar.setReviewedBy(userRepository.getReferenceById(me.getId()));
+        ar.setReviewedBy(userDao.getReference(me.getId()));
         ar.setReviewedAt(now);
         ar.setReviewComment(review != null ? review.comment() : null);
     }

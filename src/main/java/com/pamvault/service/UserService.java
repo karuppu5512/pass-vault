@@ -1,5 +1,6 @@
 package com.pamvault.service;
 
+import com.pamvault.dao.UserDao;
 import com.pamvault.dto.AuthDtos.CreateUserRequest;
 import com.pamvault.dto.AuthDtos.UserResponse;
 import com.pamvault.entity.User;
@@ -7,10 +8,8 @@ import com.pamvault.enums.AuditAction;
 import com.pamvault.exception.BadRequestException;
 import com.pamvault.exception.ConflictException;
 import com.pamvault.exception.NotFoundException;
-import com.pamvault.repository.UserRepository;
 import com.pamvault.security.AppUserPrincipal;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,16 +20,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class UserService {
 
-    private final UserRepository userRepository;
+    private final UserDao userDao;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
 
     @Transactional
     public UserResponse create(AppUserPrincipal admin, CreateUserRequest request) {
-        if (userRepository.existsByUsername(request.username())) {
+        if (userDao.existsByUsername(request.username())) {
             throw new ConflictException("Username already taken");
         }
-        if (userRepository.existsByEmail(request.email())) {
+        if (userDao.existsByEmail(request.email())) {
             throw new ConflictException("Email already registered");
         }
 
@@ -39,7 +38,7 @@ public class UserService {
         user.setEmail(request.email());
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setRole(request.role());
-        userRepository.save(user);
+        userDao.save(user);
 
         auditService.log(admin.getUsername(), AuditAction.USER_CREATED, "USER", user.getId(), null,
                 "Created " + user.getUsername() + " with role " + user.getRole());
@@ -48,7 +47,7 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public List<UserResponse> findAll() {
-        return userRepository.findAll(Sort.by("username")).stream().map(UserResponse::from).toList();
+        return userDao.findAll().stream().map(UserResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
@@ -70,6 +69,6 @@ public class UserService {
     }
 
     public User getUser(Long id) {
-        return userRepository.findById(id).orElseThrow(() -> NotFoundException.of("User", id));
+        return userDao.findById(id).orElseThrow(() -> NotFoundException.of("User", id));
     }
 }
