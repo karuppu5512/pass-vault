@@ -2,8 +2,11 @@ package com.pamvault.controller;
 
 import com.pamvault.dto.ResourceDtos.ResourceRequest;
 import com.pamvault.dto.ResourceDtos.ResourceResponse;
+import com.pamvault.dto.ResourceDtos.ShareRequest;
+import com.pamvault.dto.ResourceDtos.ShareResponse;
 import com.pamvault.security.AppUserPrincipal;
 import com.pamvault.service.ResourceService;
+import com.pamvault.service.ShareService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,6 +21,7 @@ import java.util.List;
 public class ResourceController {
 
     private final ResourceService resourceService;
+    private final ShareService shareService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -46,5 +50,23 @@ public class ResourceController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal AppUserPrincipal me, @PathVariable Long id) {
         resourceService.delete(me, id);
+    }
+
+    @PostMapping("/{id}/shares")
+    public ShareResponse share(@AuthenticationPrincipal AppUserPrincipal me, @PathVariable Long id,
+                               @Valid @RequestBody ShareRequest request) {
+        return shareService.share(me, id, request);
+    }
+
+    @GetMapping("/{id}/shares")
+    public List<ShareResponse> shares(@AuthenticationPrincipal AppUserPrincipal me, @PathVariable Long id) {
+        return shareService.findByResource(me, id);
+    }
+
+    @DeleteMapping("/{id}/shares/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void unshare(@AuthenticationPrincipal AppUserPrincipal me, @PathVariable Long id,
+                        @PathVariable Long userId) {
+        shareService.unshare(me, id, userId);
     }
 }
